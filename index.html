@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulado ENEM - Tempo de Prova</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 3em;
+            text-shadow: 3px 3px 5px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            box-shadow: 0 4px #999;
+            transition: all 0.2s ease;
+        }
+        button:active {
+            box-shadow: 0 2px #666;
+            transform: translateY(2px);
+        }
+        .start-button {
+            background-color: #4CAF50; /* Green */
+            color: white;
+        }
+        .stop-button {
+            background-color: #f44336; /* Red */
+            color: white;
+        }
+        .exam-button {
+            background-color: #008CBA; /* Blue */
+            color: white;
+        }
+        .questions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .questions button {
+            width: 100px;
+            height: 50px;
+            margin: 5px;
+            padding: 10px;
+            font-size: 14px;
+            background-color: #f1f1f1;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px #999;
+            transition: all 0.2s ease;
+        }
+        .questions button:active {
+            box-shadow: 0 2px #666;
+            transform: translateY(2px);
+        }
+        .questions button.active {
+            background-color: #f44336; /* Red */
+            color: white;
+        }
+        .result, .question-log {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .result h2, .question-log h2 {
+            text-align: center;
+        }
+        .question-log p {
+            margin: 5px 0;
+        }
+        #message {
+            text-align: center;
+            margin-bottom: 20px;
+            color: red;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simulado ENEM - Controle de Tempo</h1>
+    <div id="message"></div>
+    <div class="controls">
+        <button class="exam-button" onclick="startExam()">Iniciar Prova</button>
+        <button class="exam-button" onclick="endExam()">Finalizar Prova</button>
+    </div>
+    <div class="questions" id="questions"></div>
+    <div class="result">
+        <h2>Relatório</h2>
+        <div id="exam-time"></div>
+        <div id="question-time"></div>
+        <div id="idle-time"></div>
+        <div id="average-time"></div>
+        <div id="longest-time"></div>
+        <div id="shortest-time"></div>
+        <div id="mode-time"></div>
+    </div>
+    <div class="question-log">
+        <h2>Log de Questões</h2>
+        <div id="question-log"></div>
+    </div>
+    <script>
+        let examStartTime, examEndTime;
+        let questionTimes = {};
+        let questionStartTimes = {};
+        let lastQuestionTimes = {};
+        let idleStartTime, idleTime = 0;
+        let currentQuestion = null;
+
+        // Criar botões de questões de 136 a 180
+        function createQuestionButtons() {
+            let questionsDiv = document.getElementById("questions");
+            for (let i = 136; i <= 180; i++) {
+                let button = document.createElement("button");
+                button.innerText = `Questão ${i}`;
+                button.id = `question-${i}`;
+                button.onclick = () => toggleQuestion(i);
+                questionsDiv.appendChild(button);
+                // Inicializar tempo da questão
+                questionTimes[i] = 0;
+                lastQuestionTimes[i] = 0; // Armazenar o último tempo de cada questão
+            }
+        }
+
+        function startExam() {
+            if (!examStartTime) {
+                examStartTime = new Date();
+                idleStartTime = examStartTime; // Marca o início do tempo ocioso
+                displayMessage("Prova Iniciada", "green");
+            } else {
+                displayMessage("A prova já foi iniciada.", "orange");
+            }
+        }
+
+        function toggleQuestion(questionNumber) {
+            if (!examStartTime) {
+                displayMessage("Você deve iniciar a prova antes de começar uma questão.", "red");
+                return;
+            }
+
+            if (currentQuestion !== null && currentQuestion !== questionNumber) {
+                displayMessage("Você deve terminar a questão atual antes de começar outra.", "red");
+                return;
+            }
+
+            let button = document.getElementById(`question-${questionNumber}`);
+            if (questionStartTimes[questionNumber]) {
+                // Se já estiver sendo cronometrada, parar e somar ao tempo total
+                let endTime = new Date();
+                let timeSpent = (endTime - questionStartTimes[questionNumber]) / 1000;
+                questionTimes[questionNumber] += timeSpent;
+                lastQuestionTimes[questionNumber] = timeSpent; // Armazenar o último tempo gasto na questão
+                currentQuestion = null;
+                displayMessage(`Questão ${questionNumber} Terminada: ${formatTime(timeSpent)} adicionados`, "blue");
+                questionStartTimes[questionNumber] = null;
+                button.classList.remove("active"); // Volta à cor original
+
+                // Atualiza o log de questões
+                updateQuestionLog();
+
+                // Inicia o tempo ocioso novamente
+                idleStartTime = new Date();
+            } else {
+                // Se não estiver sendo cronometrada, iniciar o cronômetro
+                // Se não há questão atual, parar o tempo ocioso
+                if (idleStartTime) {
+                    idleTime += (new Date() - idleStartTime) / 1000;
+                    idleStartTime = null;
+                }
+                questionStartTimes[questionNumber] = new Date();
+                displayMessage(`Questão ${questionNumber} Iniciada`, "green");
+                button.classList.add("active"); // Muda para cor vermelha
+                currentQuestion = questionNumber;
+            }
+        }
+
+        function endExam() {
+            if (!examStartTime) {
+                displayMessage("Você deve iniciar a prova antes de finalizá-la.", "red");
+                return;
+            }
+            if (currentQuestion !== null) {
+                displayMessage("Você deve terminar a questão atual antes de finalizar a prova.", "red");
+                return;
+            }
+            examEndTime = new Date();
+            let totalTime = (examEndTime - examStartTime) / 1000;
+
+            // Calcular tempo ocioso restante, caso a prova seja finalizada sem outra questão ativa
+            if (idleStartTime) {
+                idleTime += (examEndTime - idleStartTime) / 1000;
+                idleStartTime = null;
+            }
+
+            // Calcular tempos e estatísticas
+            let totalQuestionTime = Object.values(questionTimes).reduce((sum, time) => sum + time, 0);
+            let averageTime = totalQuestionTime / Object.keys(questionTimes).length;
+            let longestTime = Math.max(...Object.values(questionTimes));
+            let shortestTime = Math.min(...Object.values(questionTimes));
+            let longestQuestion = Object.keys(questionTimes).find(q => questionTimes[q] === longestTime);
+            let shortestQuestion = Object.keys(questionTimes).find(q => questionTimes[q] === shortestTime);
+
+            // Calcular a moda dos minutos
+            let minuteCounts = {};
+            for (let time of Object.values(lastQuestionTimes)) {
+                let minutes = Math.floor(time / 60);
+                if (minuteCounts[minutes]) {
+                    minuteCounts[minutes]++;
+                } else {
+                    minuteCounts[minutes] = 1;
+                }
+            }
+            let maxCount = Math.max(...Object.values(minuteCounts));
+            let modeMinutes = Object.keys(minuteCounts).filter(min => minuteCounts[min] === maxCount);
+
+            // Encontrar as questões que têm a moda dos minutos
+            let questionsWithMode = [];
+            for (let [question, time] of Object.entries(lastQuestionTimes)) {
+                let minutes = Math.floor(time / 60);
+                if (modeMinutes.includes(minutes.toString())) {
+                    questionsWithMode.push(question);
+                }
+            }
+
+            // Exibir relatório
+            document.getElementById("exam-time").innerHTML = `<p>Tempo Total de Prova: ${formatTime(totalTime)}</p>`;
+            document.getElementById("question-time").innerHTML = `<p>Tempo Total em Questões: ${formatTime(totalQuestionTime)}</p>`;
+            document.getElementById("idle-time").innerHTML = `<p>Tempo Ocioso: ${formatTime(idleTime)}</p>`;
+            document.getElementById("average-time").innerHTML = `<p>Tempo Médio por Questão: ${formatTime(averageTime)}</p>`;
+            document.getElementById("longest-time").innerHTML = `<p>Questão que mais demorou: Questão ${longestQuestion} (${formatTime(longestTime)})</p>`;
+            document.getElementById("shortest-time").innerHTML = `<p>Questão mais rápida: Questão ${shortestQuestion} (${formatTime(shortestTime)})</p>`;
+            document.getElementById("mode-time").innerHTML = `<p>Moda dos Minutos: ${modeMinutes.join(", ")} min (Questões: ${questionsWithMode.join(", ")})</p>`;
+            
+            displayMessage("Prova Finalizada", "blue");
+
+            // Atualiza o log de questões para mostrar em ordem crescente de tempo
+            updateQuestionLog(true);
+        }
+
+        // Função para atualizar o log de questões conforme elas vão sendo finalizadas
+        function updateQuestionLog(sort = false) {
+            let questionLogDiv = document.getElementById("question-log");
+            questionLogDiv.innerHTML = ""; // Limpa o log anterior
+
+            let entries = Object.entries(lastQuestionTimes);
+            if (sort) {
+                entries.sort((a, b) => a[1] - b[1]); // Ordenar por tempo crescente
+            }
+
+            for (let [question, time] of entries) {
+                if (time > 0) { // Exibe apenas questões que foram cronometradas
+                    questionLogDiv.innerHTML += `<p>Questão ${question}: ${formatTime(time)}</p>`;
+                }
+            }
+        }
+
+        function displayMessage(message, color) {
+            let messageDiv = document.getElementById("message");
+            messageDiv.innerHTML = message;
+            messageDiv.style.color = color;
+            setTimeout(() => {
+                messageDiv.innerHTML = "";
+            }, 3000);
+        }
+
+        // Função para formatar o tempo em horas, minutos e segundos
+        function formatTime(seconds) {
+            let h = Math.floor(seconds / 3600);
+            let m = Math.floor((seconds % 3600) / 60);
+            let s = Math.floor(seconds % 60);
+            return `${h}h ${m}m ${s}s`;
+        }
+
+        createQuestionButtons();
+    </script>
+</body>
+</html>
